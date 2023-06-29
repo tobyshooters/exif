@@ -1,0 +1,151 @@
+<script>
+const $ = ({
+  el,      // element or string type
+  pr,      // parent node
+  st = {}, // style
+  at = {}, // attributes
+  ev = {}, // events, element injected as first parameter
+  ih = ""  // innerHTML
+}) => {
+  let n = el;
+  if (typeof el === "string") {
+    n = document.createElement(el);
+    pr.appendChild(n);
+  }
+  for (const [k, v] of Object.entries(st)) {
+    n.style.setProperty(k, v);
+  }
+  for (const [k, v] of Object.entries(at)) {
+    n.setAttribute(k, v);
+  }
+  for (const [e, f] of Object.entries(ev)) {
+    const p = (...args) => f(n, ...args);
+    n.addEventListener(e, p);
+  }
+  n.innerHTML = ih;
+  return n;
+}
+
+const render = (db) => {
+  document.body.innerHTML = "";
+  window.db = db;
+
+  const count = db.count || 0;
+
+  const images = [...Object.keys(db.images)];
+  const currImage = images[count];
+  const currData = db.images[currImage];
+
+  $({ 
+    el: document.body,
+    st: { "background-color": "eee" },
+  })
+
+  const input = $({
+    el: "input",
+    pr: document.body,
+    st: {
+      "display": "none",
+      "position": "absolute",
+      "top": "50%",
+      "left": "50%",
+      "transform": "translate(-50%, -50%)",
+    },
+    ev: {
+      "change": (el) => send({
+        op: "PUT",
+        path: ["images", currImage, "UserComment"],
+        data: currData["UserComment"] + "," + el.value,
+      })
+    }
+  })
+
+  const div = $({
+    el: "div",
+    pr: document.body,
+    st: { 
+      "display": "flex", 
+      "flex-direction": "column",
+      "align-items": "flex-start",
+      "margin": "20px",
+      "padding": "20px",
+      "background-color": "fff",
+    }
+  })
+
+  $({
+    el: "img",
+    pr: div,
+    at: {src: `/static/${currImage}`},
+    st: { height: "400px", width: "auto" }
+  })
+
+  if ("UserComment" in currData) {
+    const tagDiv = $({ 
+      el: "div", 
+      pr: div,
+      st: { "margin": "20px 0px" },
+    })
+
+    for (const tag of currData["UserComment"].split(",")) {
+      if (!tag) continue;
+
+      $({
+        el: "span",
+        pr: tagDiv,
+        st: { 
+          "padding": "5px 10px",
+          "margin-right": "5px",
+          "background-color": "gold",
+          "cursor": "not-allowed",
+        },
+        ih: tag,
+        ev: {
+          "click": () => send({
+            op: "PUT",
+            path: ["images", currImage, "UserComment"],
+            data: currData["UserComment"].replace(tag, "").replace(",,", ",")
+          }),
+          "mouseover": (el) => el.style.backgroundColor = "red",
+          "mouseout": (el) => el.style.backgroundColor = "gold",
+        }
+      })
+    }
+  }
+
+  $({ el: "pre",
+    pr: div,
+    ih: JSON.stringify(currData, null, 2),
+  })
+
+  // Event handlers
+  const step = (dx) => send({
+    op: "PUT",
+    path: ["count"],
+    data: (count + images.length + dx) % images.length,
+  })
+
+  document.body.onkeyup = e => {
+    if (["j", "ArrowLeft" ].includes(e.key)) step(-1);
+    if (["k", "ArrowRight"].includes(e.key)) step( 1);
+
+    if (["t"].includes(e.key)) {
+      input.style.display = "block";
+      input.focus();
+      // open text-editor
+      // type in tag
+      // send to be added to exif
+      // actually persist in image
+    }
+  }
+}
+
+// Setup server
+const ws = new WebSocket("ws://localhost:1234/ws")
+const send = (msg) => ws.send(JSON.stringify(msg));
+window.send = send;
+
+ws.onopen = () => send({op: "SUBSCRIBE", path: []});
+ws.onmessage = (e) => render(JSON.parse(e.data));
+
+</script>
