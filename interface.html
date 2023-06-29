@@ -26,21 +26,66 @@ const $ = ({
   return n;
 }
 
-const render = (db) => {
-  document.body.innerHTML = "";
-  window.db = db;
+const renderImage = (db, header, div) => {
 
-  const count = db.count || 0;
-
-  const images = [...Object.keys(db.images)];
-  const currImage = images[count];
+  const currImage = db.mode;
   const currData = db.images[currImage];
 
-  $({ 
-    el: document.body,
-    st: { "background-color": "eee" },
+  $({ el: "p", pr: header, ih: "<b>j/k</b> to navigate; <b>t</b> to tag; <b>c</b> for channel view" })
+
+  $({
+    el: "img",
+    pr: div,
+    at: {src: `/static/${currImage}`},
+    st: { 
+      "width": "100%",
+      "height": "50vh",
+      "object-fit": "contain",
+      "background-color": "eeeeee",
+    }
   })
 
+  const tagDiv = $({ 
+    el: "div", 
+    pr: div,
+    st: { 
+      "margin": "20px 0px",
+      "display": "flex",
+      "flex-wrap": "wrap",
+      "align-items": "center"
+    },
+  })
+
+  const imageTags = (currData["UserComment"] || "").split(",").filter(t => t);
+  for (const tag of imageTags) {
+    $({
+      el: "span",
+      pr: tagDiv,
+      st: { 
+        "padding": "5px 10px",
+        "margin-right": "5px",
+        "background-color": "lime",
+        "cursor": "not-allowed",
+      },
+      ih: tag,
+      ev: {
+        "click": () => send({
+          op: "PUT",
+          path: ["images", currImage, "UserComment"],
+          data: imageTags.replace(tag, "").replace(",,", ",")
+        }),
+        "mouseover": (el) => el.style.backgroundColor = "red",
+        "mouseout": (el) => el.style.backgroundColor = "lime",
+      }
+    })
+  }
+
+  $({ el: "pre",
+    pr: div,
+    ih: "exif = " + JSON.stringify(currData, null, 2),
+  })
+
+  // Event handlers
   const input = $({
     el: "input",
     pr: document.body,
@@ -55,9 +100,100 @@ const render = (db) => {
       "change": (el) => send({
         op: "PUT",
         path: ["images", currImage, "UserComment"],
-        data: currData["UserComment"] + "," + el.value,
+        data: (currData["UserComment"] || "") + "," + el.value,
+      }),
+    }
+  })
+
+
+  const paths = [...Object.keys(db.images)];
+  const currIdx = paths.indexOf(currImage);
+
+  const step = (dx) => send({
+    op: "PUT",
+    path: ["mode"],
+    data: paths[(currIdx + paths.length + dx) % paths.length],
+  })
+
+  document.body.onkeyup = e => {
+    if (["j", "ArrowLeft" ].includes(e.key)) step(-1);
+    if (["k", "ArrowRight"].includes(e.key)) step( 1);
+
+    if (["c"].includes(e.key)) {
+      send({ op: "PUT", path: ["mode"], data: "channel" })
+    }
+
+    if (["t"].includes(e.key)) {
+      input.style.display = "block";
+      input.focus();
+    }
+  }
+}
+
+const renderChannels = (db, header, div) => {
+
+  $({ el: "p", pr: header, ih: "<b>click</b> for image view" })
+
+  const tagDivs = {};
+  for (const [path, data] of Object.entries(db.images)) {
+
+    const imageTags = (data["UserComment"] || "").split(",").filter(t => t);
+
+    for (const tag of imageTags) {
+
+      let tagDiv = tagDivs[tag];
+      if (!tagDiv) {
+        tagDiv = $({ el: "div", pr: div })
+
+        $({ 
+          el: "h3",
+          pr: tagDiv,
+          st: {
+            "padding": "5px 10px",
+            "margin-right": "5px",
+            "background-color": "lime",
+            "cursor": "pointer",
+          },
+          ih: tag
+        })
+
+        tagDivs[tag] = tagDiv;
+      }
+
+      $({
+        el: "img",
+        pr: tagDiv,
+        at: {src: `/static/${path}`},
+        st: { 
+          "width": "150px",
+          "height": "150px",
+          "margin": "5px",
+          "object-fit": "contain",
+          "background-color": "eeeeee",
+          "cursor": "pointer",
+        },
+        ev: {
+          "click": () => send({
+            op: "PUT",
+            path: ["mode"],
+            data: path,
+          })
+        }
       })
     }
+  }
+}
+
+const render = (db) => {
+  document.body.innerHTML = "";
+  window.db = db;
+
+  $({ 
+    el: document.body,
+    st: { 
+      "background-color": "eee",
+      "font-family": "monospace",
+    },
   })
 
   const div = $({
@@ -68,75 +204,31 @@ const render = (db) => {
       "flex-direction": "column",
       "align-items": "flex-start",
       "margin": "20px",
-      "padding": "20px",
+      "padding": "10px 30px",
       "background-color": "fff",
+      "border": "2px solid black"
     }
   })
 
-  $({
-    el: "img",
+  const header = $({
+    el: "div",
     pr: div,
-    at: {src: `/static/${currImage}`},
-    st: { height: "400px", width: "auto" }
-  })
-
-  if ("UserComment" in currData) {
-    const tagDiv = $({ 
-      el: "div", 
-      pr: div,
-      st: { "margin": "20px 0px" },
-    })
-
-    for (const tag of currData["UserComment"].split(",")) {
-      if (!tag) continue;
-
-      $({
-        el: "span",
-        pr: tagDiv,
-        st: { 
-          "padding": "5px 10px",
-          "margin-right": "5px",
-          "background-color": "gold",
-          "cursor": "not-allowed",
-        },
-        ih: tag,
-        ev: {
-          "click": () => send({
-            op: "PUT",
-            path: ["images", currImage, "UserComment"],
-            data: currData["UserComment"].replace(tag, "").replace(",,", ",")
-          }),
-          "mouseover": (el) => el.style.backgroundColor = "red",
-          "mouseout": (el) => el.style.backgroundColor = "gold",
-        }
-      })
+    st: { 
+      "width": "100%",
+      "display": "flex", 
+      "align-items": "center",
+      "justify-content": "space-between",
     }
-  }
-
-  $({ el: "pre",
-    pr: div,
-    ih: JSON.stringify(currData, null, 2),
   })
 
-  // Event handlers
-  const step = (dx) => send({
-    op: "PUT",
-    path: ["count"],
-    data: (count + images.length + dx) % images.length,
-  })
+  $({ el: "h2", pr: header, ih: "ARE.XIF" })
 
-  document.body.onkeyup = e => {
-    if (["j", "ArrowLeft" ].includes(e.key)) step(-1);
-    if (["k", "ArrowRight"].includes(e.key)) step( 1);
+  const mode = db.mode || "channel";
 
-    if (["t"].includes(e.key)) {
-      input.style.display = "block";
-      input.focus();
-      // open text-editor
-      // type in tag
-      // send to be added to exif
-      // actually persist in image
-    }
+  if (mode === "channel") {
+    renderChannels(db, header, div);
+  } else {
+    renderImage(db, header, div);
   }
 }
 

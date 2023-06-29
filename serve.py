@@ -7,11 +7,13 @@ import tornado.websocket
 import glob
 from PIL import Image, ExifTags, TiffImagePlugin
 
+SRC_PATH = os.path.dirname(__file__)
+IMG_PATH = os.getcwd()
 
 def all_images():
     images = []
     for ext in ("jpg", "png", "gif"):
-        images.extend(glob.glob(f"*.{ext}"))
+        images.extend(glob.glob(f"{IMG_PATH}/*.{ext}"))
     return images
 
 
@@ -39,7 +41,7 @@ def set_exif_comment(path, data):
 
 class DB:
     def __init__(self):
-        self.path = "./db.json"
+        self.path = f"./{IMG_PATH}/db.json"
         self.db = {}
         self.callbacks = []
 
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     app = tornado.web.Application([
         (r'/', IndexHandler),
         (r'/ws', WSHandler),
-        (r'/static/(.*)', tornado.web.StaticFileHandler, {"path": "."}),
+        (r'/static/(.*)', tornado.web.StaticFileHandler, {"path": IMG_PATH}),
     ], debug=True)
 
     app.listen(1234)
